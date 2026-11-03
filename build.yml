@@ -1,0 +1,50 @@
+name: Build
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tim source
+        id: src
+        run: |
+          if [ -f build.gradle ]; then
+            echo "dir=." >> "$GITHUB_OUTPUT"
+          else
+            Z="$(ls *.zip | sort | tail -n 1)"
+            echo "Dung file: $Z"
+            rm -rf proj && mkdir proj
+            unzip -q "$Z" -d proj
+            echo "dir=proj" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.12
+
+      - name: Build
+        shell: bash
+        working-directory: ${{ steps.src.outputs.dir }}
+        run: gradle build --no-daemon 2>&1 | tee build.log
+
+      - name: Loi (neu co)
+        if: failure()
+        working-directory: ${{ steps.src.outputs.dir }}
+        run: grep -n -E "error:|FAILED|What went wrong" -A3 build.log | head -80
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LanAnhClient-jar
+          path: |
+            ${{ steps.src.outputs.dir }}/build/libs/*.jar
+            !${{ steps.src.outputs.dir }}/build/libs/*-sources.jar
